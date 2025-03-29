@@ -136,6 +136,40 @@ export default {
       const profile = await Profile.findOne({ username });
       return await Message.find({ owner: profile._id }).populate("owner");
     },
+
+    async getRecommendations(_, __, context) {
+      // Get the current user's username from the context
+      const currentUsername = context.user?.username;
+      if (!currentUsername) throw new Error("Unauthorized");
+
+      const session = neo4jDriver.session();
+      try {
+        // Cypher query to find recommended users
+        const result = await session.run(
+          `
+          MATCH (current:User {username: $currentUsername})-[:FOLLOWS]->(followed:User)<-[:FOLLOWS]-(rec:User)
+          WHERE NOT (rec)-[:FOLLOWS]->(current)
+            AND NOT (current)-[:FOLLOWS]->(rec)
+            AND rec <> current
+          RETURN rec.username AS username, count(followed) AS mutualCount
+          ORDER BY mutualCount DESC
+          LIMIT 5
+          `,
+          { currentUsername }
+        );
+
+        // Extract usernames from the query result
+        const recommendedUsernames = result.records.map(record => record.get("username"));
+
+        // Fetch profiles from MongoDB
+        const recommendedProfiles = await Profile.find({ username: { $in: recommendedUsernames } });
+
+        return recommendedProfiles;
+      } finally {
+        session.close();
+      }
+    },
+
   },
   
   Mutation: {

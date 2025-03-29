@@ -27,6 +27,7 @@ export default gql`
     getFollowers(username: String!): [String]
     getFollowing(username: String!): [String]
     getMessages(username: String!): [Message]
+    getRecommendations: [Profile]
   }
 
   type Mutation {
