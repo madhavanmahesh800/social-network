@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import neo4j from "neo4j-driver";
+import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -28,3 +29,22 @@ export const connectNeo4j = async () => {
     console.error(" Neo4j Error:", err);
   }
 };
+
+//Mysql connection
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: "mysql",
+  logging: false, 
+});
+
+const connectMySQL = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log("MySQL Connected");
+  } catch (error) {
+    console.error("MySQL Error:", error);
+  }
+};
+
+export { sequelize, connectMySQL };
+
+

@@ -4,7 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import typeDefs from "./graphql/schema.js";
 import resolvers from "./graphql/resolvers.js";
-import { connectMongo, connectNeo4j } from "./config/db.js";
+import { connectMongo, connectNeo4j,connectMySQL,sequelize} from "./config/db.js";
 import jwt from "jsonwebtoken";
 import BlacklistedToken from "./models/BlacklistedToken.js";
 
@@ -36,6 +36,7 @@ const context = async ({ req }) => {
 app.use(cors());
 connectMongo();
 connectNeo4j();
+connectMySQL();
 
 // const server = new ApolloServer({ typeDefs, resolvers });
 const server = new ApolloServer({
@@ -58,6 +59,16 @@ const server = new ApolloServer({
 
 await server.start();
 server.applyMiddleware({ app });
+
+
+const startServer = async () => {
+  await connectMySQL();
+  await sequelize.sync({ alter: true }); // Creates tables if missing
+  console.log("✅ Database Synced!");
+};
+
+startServer();
+
 
 app.listen(4000, () => console.log(`Server running at http://localhost:4000/graphql`));
 

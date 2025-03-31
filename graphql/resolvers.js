@@ -4,6 +4,7 @@ import Profile from "../models/Profile.js";
 import Message from "../models/Message.js";
 import { neo4jDriver } from "../config/db.js";
 import BlacklistedToken from '../models/BlacklistedToken.js';
+import Post from "../models/mysql/Post.js";
 
 const generateToken = (username) => jwt.sign({ username }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
@@ -170,6 +171,42 @@ export default {
       }
     },
 
+    async getPosts(_, { username }, context) {
+      const currentUser = context.user?.username;
+      if (!currentUser) throw new Error("Unauthorized");
+    
+      const session = neo4jDriver.session();
+      try {
+        // Check if the current user follows the target user
+        const followCheck = await session.run(
+          `
+          MATCH (current:User {username: $currentUser})-[:FOLLOWS]->(target:User {username: $username})
+          RETURN target
+          `,
+          { currentUser, username }
+        );
+    
+        if (followCheck.records.length === 0 && currentUser !== username) {
+          throw new Error("You are not allowed to view these posts");
+        }
+    
+        // Fetch posts from MySQL
+        const posts = await Post.findAll({ where: { userId: username } });
+        return posts;
+      } finally {
+        session.close();
+      }
+    },
+    async getPosts() {
+      try {
+        return await Post.findAll();
+      } catch (error) {
+        console.error("Error fetching posts:", error);
+        throw new Error("Failed to fetch posts");
+      }
+    },
+    
+
   },
   
   Mutation: {
@@ -308,6 +345,37 @@ export default {
       await message.deleteOne();
       return "Message deleted";
     },
+    
+    async postImage(_, { userId, imageUrl, description }) {
+      try {
+        // Ensure all required parameters are provided
+        if (!userId || !imageUrl || !description) {
+          throw new Error("Missing required parameters");
+        }
+    
+        // Save the post in MySQL
+        const newPost = await Post.create({ userId, imageUrl, description });
+        console.log("Post created successfully:", newPost);
+    
+        // Fetch followers from Neo4j
+        const session = neo4jDriver.session();
+        const result = await session.run(
+          "MATCH (u:User {username: $userId})<-[:FOLLOWS]-(f) RETURN f.username",
+          { userId }
+        );
+        session.close();
+    
+        // Extract followers' usernames
+        const followers = result.records.map((r) => r.get("f.username"));
+        console.log(`Notifying followers: ${followers}`);
+    
+        return newPost;
+      } catch (error) {
+        console.error("Error posting image:", error.message);
+        throw new Error("Failed to post image");
+      }
+    },
+    
   }
 };
 
